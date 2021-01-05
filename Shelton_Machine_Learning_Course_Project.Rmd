@@ -1,0 +1,129 @@
+---
+title: "Machine Learning Course Project"
+author: "Brett E Shelton"
+date: "01/02/2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+## Executive Summary
+### Synopsis - Overview
+The basic goal of this report is to explore the prediction power of machine learning as applied to an exercise dataset, so that we might predict which exercise is being completed (classe in the original data).   "One thing that people regularly do is quantify how  much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants."     
+To complete this report, it will include:  
+* “a description of how the prediction model was built”  
+* "how cross validation was used"  
+* "what the expected out-of-sample error is"  
+* "why the choices were made"  
+* "use of the prediction model to predict 20 test cases"  
+__Background and data:__  
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).  
+__Data__  
+The training data for this project are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+The test data are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har.
+  
+### Cleaning and Tidying the Data  
+Here we load the libraries. 
+```{r, echo=TRUE, results='hold', warning=FALSE, message=FALSE}
+library(dplyr); library(datasets); library(knitr); library(ggplot2);
+library(rattle); library(caret); library(randomForest); library(rpart); library(rpart.plot); library(klaR)
+set.seed(1411)
+```
+Here we load the data and put it into the format desirable for our analysis.
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+if (file.exists("./pml-training.csv") == FALSE) {
+    download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv","./pml-training.csv")
+}
+if (file.exists("./pml-testing.csv") == FALSE) {
+    download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv","./pml-testing.csv")
+}
+pml.training <- read.csv("./pml-training.csv",sep = ",",header = TRUE)
+pml.testing <- read.csv("./pml-testing.csv",sep = ",",header = TRUE)
+```
+Check the names and the unique users of training and testing data.
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+dim(pml.training); dim(pml.testing)
+unique(pml.training$user_name)
+colnames(pml.training)
+```
+## Select data that may be useful and eliminate variables with too many NA.  
+Since we can't test the model on any data that's not in the test dataset,
+we'll clean the test data and use those variables to pull the training set.
+So, if the NA data constitutes greater than 80% of the variable, we remove it.
+We can also remove index value, timestamps and window info, as well as the last variable which doesn't match the training set.
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+pml.training.c <- pml.training[,c(2,8:159)]
+pml.testing.c <- pml.testing[,c(2,8:159)]
+
+#here we take out the variables with NA data
+empty.vars <- colnames(pml.testing.c[colSums(is.na(pml.testing.c)) > (.8*(nrow(pml.testing.c)))])
+keepers <- !(colnames(pml.testing.c)  %in% empty.vars)
+keep.vars <- colnames(pml.testing.c[(keepers == TRUE)])
+testing <- pml.testing.c[keep.vars]
+training <- pml.training.c[keep.vars]
+
+#add the classe variable back to training set
+training <- mutate(training, classe = pml.training$classe)
+
+colnames(training)
+```
+## Random Forest
+The outcome we are trying to predict is the final "class" of exercise with a dumbell, based on data gathered from 6 male participants.  
+* Class A is the correct use of the dumbell.  
+* Class B is with elbows too far forward.  
+* Class C is a half-way lift.  
+* Class D is a half-way drop.  
+* Class E is with hips too far forward.  
+
+If we use a method like random forest for our prediction, we achieve cross validation that avoids overfitting due to the split of training and test sets, and due to randomization of variable selection over each tree split. That is, the "train" function in the "caret" package takes care of the cross validation for us. For further clarification, we could use the "rfcv" function. That is,  
+__rfcv(trainx = rfTraining[,-54], trainy = rfTraining[,54])__    
+should give us the number of predictors and the error rate associated with each as we reduce the number of predictors in the rf model.  
+Out-of-sampling error in random forests is a technique to verify the performance of the bootstrapping method, but since we have a validation set (the second split of our our original training set), that error is already addressed by comparing accuracies.
+
+### Random forest prediction
+First we split the designated testing data into 2 partitions to train and test the random forest model.
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+inTrain <- createDataPartition(y=training$classe,p=0.7,list = FALSE)
+rfTraining <- training[inTrain,]
+rfTesting <- training[-inTrain,]
+# modFit.rf <- train(classe ~ .,data=rfTraining,method="rf",prox=TRUE)
+modFit.rf <- randomForest(classe ~ ., data = rfTraining)
+prediction.rf <- predict(modFit.rf,rfTesting,type = "class")
+cm.rf <- confusionMatrix(prediction.rf, rfTesting$classe)
+cm.rf
+```
+As seen in the confusion matrix, accuracy of the random forest attempt resulted in 99.29% on the subsetted test data.
+
+### Can we improve with a different model?
+Let's see if a decision tree (CART) is more accurate, using cross validation (xval).
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+fitControl <- rpart.control(cp=0.0001,xval = 10)
+modFit.dt <- rpart(classe ~ ., method="class",data=rfTraining,control=fitControl)
+rpart.plot(modFit.dt)
+prediction.dt <- predict(modFit.dt, rfTesting, type = "class")
+cm.dt <- confusionMatrix(prediction.dt, rfTesting$classe)
+cm.dt
+```
+As suspected, the CART decision tree was less accurate on the subsetted test data, resulting in 92.06%. Not bad, but not as good.
+
+What about a linear discriminant analysis model?
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+modFit.lda <- train(classe ~ ., data=rfTraining,method="lda")
+prediction.lda <- predict(modFit.lda, rfTesting)
+cm.lda <- confusionMatrix(prediction.lda, rfTesting$classe)
+cm.lda
+```
+Here, accuracy results in 72.39%, so our original random forest is still a better choice.
+
+### Predicting the Final Test Dataset
+Because the random forest model had by far the best accuracy on the testing validation set, we apply it to the final test set to turn in for the assignment.
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+prediction.final <- predict(modFit.rf, testing)
+prediction.final
+```
+
+
+
