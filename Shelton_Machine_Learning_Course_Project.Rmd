@@ -96,7 +96,7 @@ prediction.rf <- predict(modFit.rf,rfTesting)
 cm.rf <- confusionMatrix(prediction.rf, rfTesting$classe)
 cm.rf
 ```
-As seen in the confusion matrix, accuracy of the random forest attempt resulted in 99.29% on the subsetted test data.
+As seen in the confusion matrix, accuracy of the random forest attempt resulted in 99.29% on the subsetted test data. Out of sample error is 1 - the accuracy, or .0071
 
 ### Can we improve with a different model?
 Let's see if a decision tree (CART) is more accurate, using cross validation (xval).
