@@ -3,8 +3,8 @@ title: "Machine Learning Course Project"
 author: "Brett E Shelton"
 date: "01/02/2020"
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 ---
 
 ## Executive Summary
@@ -92,7 +92,7 @@ rfTesting <- training[-inTrain,]
 modFit.rf <- train(classe ~ .,data=rfTraining,method="rf",trControl=trainControl(method="cv",number = 3),ntree=200)
 # different method same result
 # modFit.rf <- randomForest(classe ~ ., data = rfTraining)
-prediction.rf <- predict(modFit.rf,rfTesting,type = "class")
+prediction.rf <- predict(modFit.rf,rfTesting)
 cm.rf <- confusionMatrix(prediction.rf, rfTesting$classe)
 cm.rf
 ```
