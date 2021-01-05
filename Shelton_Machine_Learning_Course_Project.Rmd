@@ -89,8 +89,9 @@ First we split the designated testing data into 2 partitions to train and test t
 inTrain <- createDataPartition(y=training$classe,p=0.7,list = FALSE)
 rfTraining <- training[inTrain,]
 rfTesting <- training[-inTrain,]
-# modFit.rf <- train(classe ~ .,data=rfTraining,method="rf",prox=TRUE)
-modFit.rf <- randomForest(classe ~ ., data = rfTraining)
+modFit.rf <- train(classe ~ .,data=rfTraining,method="rf",trControl=trainControl(method="cv",number = 3),ntree=200)
+# different method same result
+# modFit.rf <- randomForest(classe ~ ., data = rfTraining)
 prediction.rf <- predict(modFit.rf,rfTesting,type = "class")
 cm.rf <- confusionMatrix(prediction.rf, rfTesting$classe)
 cm.rf
